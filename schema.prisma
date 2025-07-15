@@ -1,0 +1,204 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // Or your preferred database (mysql, sqlite, etc.)
+  url      = env("DATABASE_URL")
+}
+
+// Tenant (Business) Model
+model Tenant {
+  id        String    @id @default(uuid())
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  users     User[]
+  coa       Account[]
+  inventory InventoryItem[]
+  purchases Purchase[]
+  sales     Sale[]
+  journals  JournalEntry[]
+  customers Customer[]
+  vendors   Vendor[]
+}
+
+// User Model (with Tenant Relationship)
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  password  String
+  name      String
+  role      UserRole  @default(USER) // ADMIN, MANAGER, USER
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  USER
+}
+
+// Chart of Accounts Model
+model Account {
+  id            String         @id @default(uuid())
+  accountNumber String
+  accountName   String
+  accountType   AccountType
+  accountCategory String?
+  balance       Decimal        @default(0)
+  tenantId      String
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  journalEntriesCredit JournalEntryItem[] @relation("CreditEntries")
+  journalEntriesDebit JournalEntryItem[] @relation("DebitEntries")
+  purchasePayables Purchase[] @relation("PurchasePayableAccount")
+  purchaseInventory Purchase[] @relation("PurchaseInventoryAccount")
+  saleReceivables Sale[] @relation("SaleReceivableAccount")
+  saleRevenue Sale[] @relation("SaleRevenueAccount")
+  saleCOGS Sale[] @relation("SaleCOGSAccount")
+  saleInventory Sale[] @relation("SaleInventoryAccount")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+// Inventory Model
+model InventoryItem {
+  id          String    @id @default(uuid())
+  itemCode    String    @unique
+  itemName    String
+  description String?
+  unitPrice   Decimal   @default(0)
+  quantity    Decimal   @default(0)
+  costPrice   Decimal   @default(0)
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+  purchaseItems PurchaseItem[]
+  saleItems SaleItem[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// Purchase Model
+model Purchase {
+  id              String         @id @default(uuid())
+  purchaseDate    DateTime
+  vendorId        String
+  vendor          Vendor         @relation(fields: [vendorId], references: [id])
+  items           PurchaseItem[]
+  totalAmount     Decimal
+  purchaseInvoice String?
+  tenantId        String
+  tenant          Tenant         @relation(fields: [tenantId], references: [id])
+  accountPayableAccountId String
+  accountPayableAccount Account @relation("PurchasePayableAccount", fields: [accountPayableAccountId], references: [id])
+  inventoryAccountId String
+  inventoryAccount Account @relation("PurchaseInventoryAccount", fields: [inventoryAccountId], references: [id])
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model PurchaseItem {
+  id String @id @default(uuid())
+  purchaseId String
+  purchase Purchase @relation(fields: [purchaseId], references: [id])
+  inventoryItemId String
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  quantity Decimal
+  unitPrice Decimal
+}
+
+// Sales Model
+model Sale {
+  id                     String      @id @default(uuid())
+  saleDate               DateTime
+  customerId             String
+  customer               Customer    @relation(fields: [customerId], references: [id])
+  items                  SaleItem[]
+  totalAmount            Decimal
+  salesInvoice           String?
+  tenantId               String
+  tenant                 Tenant      @relation(fields: [tenantId], references: [id])
+  accountReceivableAccountId String
+  accountReceivableAccount Account @relation("SaleReceivableAccount", fields: [accountReceivableAccountId], references: [id])
+  salesRevenueAccountId String
+  salesRevenueAccount Account @relation("SaleRevenueAccount", fields: [salesRevenueAccountId], references: [id])
+  costOfGoodsSoldAccountId String
+  costOfGoodsSoldAccount Account @relation("SaleCOGSAccount", fields: [costOfGoodsSoldAccountId], references: [id])
+  inventoryAccountId String
+  inventoryAccount Account @relation("SaleInventoryAccount", fields: [inventoryAccountId], references: [id])
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+}
+
+model SaleItem {
+  id String @id @default(uuid())
+  saleId String
+  sale Sale @relation(fields: [saleId], references: [id])
+  inventoryItemId String
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  quantity Decimal
+  unitPrice Decimal
+}
+
+// Journal Entries Model
+model JournalEntry {
+  id          String             @id @default(uuid())
+  date        DateTime
+  description String?
+  items       JournalEntryItem[]
+  tenantId    String
+  tenant      Tenant             @relation(fields: [tenantId], references: [id])
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+}
+
+model JournalEntryItem {
+  id         String   @id @default(uuid())
+  journalEntryId String
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id])
+  creditAccountId String
+  debitAccountId String
+  accountCredit Account @relation("CreditEntries", fields: [creditAccountId], references: [id])
+  accountDebit Account @relation("DebitEntries", fields: [debitAccountId], references: [id])
+  debit      Decimal  @default(0)
+  credit     Decimal  @default(0)
+}
+
+// Customer Model
+model Customer {
+    id String @id @default(uuid())
+    name String
+    email String?
+    phone String?
+    address String?
+    tenantId String
+    tenant Tenant @relation(fields: [tenantId], references: [id])
+    sales Sale[]
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
+
+// Vendor Model
+model Vendor {
+    id String @id @default(uuid())
+    name String
+    email String?
+    phone String?
+    address String?
+    tenantId String
+    tenant Tenant @relation(fields: [tenantId], references: [id])
+    purchases Purchase[]
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
